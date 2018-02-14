@@ -22,7 +22,7 @@
 /************************* WiFi Access Point *********************************/
 
 #define WLAN_SSID       "bilinmez"  //wifi kullanıcı adı
-#define WLAN_PASS       "şifre" wifi şifresi
+#define WLAN_PASS       "şifre" //wifi şifresi
 
 /************************* Adafruit.io Setup *********************************/
 
