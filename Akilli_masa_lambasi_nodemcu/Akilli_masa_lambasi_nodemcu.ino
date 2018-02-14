@@ -1,106 +1,111 @@
+/***************************************************
+  Adafruit MQTT Library ESP8266 Example
 
+  Must use ESP8266 Arduino from:
+    https://github.com/esp8266/Arduino
 
-#include<EEPROM.h>
+  Works great with Adafruit's Huzzah ESP board & Feather
+  ----> https://www.adafruit.com/product/2471
+  ----> https://www.adafruit.com/products/2821
 
-#include <ESP8266WiFi.h>
+  Adafruit invests time and resources providing this open source code,
+  please support Adafruit and open-source hardware by purchasing
+  products from Adafruit!
+
+  Written by Tony DiCola for Adafruit Industries.
+  MIT license, all text above must be included in any redistribution
+ ****************************************************/
+#include <ESP8266WiFi.h>   
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
 
+/************************* WiFi Access Point *********************************/
+
+#define WLAN_SSID       "bilinmez"  //wifi kullanıcı adı
+#define WLAN_PASS       "şifre" wifi şifresi
+
+/************************* Adafruit.io Setup *********************************/
+
+#define AIO_SERVER      "io.adafruit.com" //mqtt sunucu adresi (biz adafruit kullanacağımız için adafruit.io'nun bize vermiş olduğu adresi girdik)
+#define AIO_SERVERPORT  1883                 // mqtt sunucu portu (varsayılan port numarası 1883) 
+#define AIO_USERNAME    "ADAFRUIT IO KULLANICI ADI" // oluşturduğumuz  adafruit kullanıcı adı 
+#define AIO_KEY         "ADAFRUIT IO KEY" // Adafruit io key (Resim 10 üzerinde nasıl alacağınız mevcut mevcut)
 
 
-String wifikullaniciad = "ssid"; //WİFİ SİFRESİ BURADAN DEĞİŞTİRECEKSİN <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< HASAN ABİ BURASI
-String wifisifre = "internet şifresi";
+WiFiClient client; // wifi istemcisi oluşturuldu
+
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY); // adafruit mqtt istemcisi oluşturuldu
+
+Adafruit_MQTT_Publish photocell = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/deneme");// adafruit için mqtt publisher oluşturuldu (Şu anda bize lazım değil ama ileriki projelerde gerekli olacak)
 
 
-#define ARB_SERVER      "192.168.1.102"
-#define ARB_SERVERPORT  1883                   // use 8883 for SSL
-#define ARB_USERNAME    "TestUser"
-#define ARB_PW         "TestUser"
+Adafruit_MQTT_Subscribe onoffbutton = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/deneme1"); // veri dinleyicisi oluşturuldu ( Tırnak içerisindeki bölüme resim 2-4 arasında oluşturduğumuz ismi yazıyoruz)
 
-/************ Global State (you don't need to change this!) ******************/
-
-// Create an ESP8266 WiFiClient class to connect to the MQTT server.
-WiFiClient client;
-// or... use WiFiFlientSecure for SSL
-//WiFiClientSecure client;
-
-// Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
-Adafruit_MQTT_Client mqtt(&client, ARB_SERVER, ARB_SERVERPORT, ARB_USERNAME, ARB_PW);
-
-/****************************** Feeds ***************************************/
-
-// Setup a feed called 'photocell' for publishing.
-// Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
-Adafruit_MQTT_Publish photocell = Adafruit_MQTT_Publish(&mqtt, "/cihaz", MQTT_QOS_1);
-
-// Setup a feed called 'onoff' for subscribing to changes.
-Adafruit_MQTT_Subscribe onoffbutton = Adafruit_MQTT_Subscribe(&mqtt, "/cihaz/cihaz1", MQTT_QOS_1);
-//Adafruit_MQTT_Subscribe onoffbutton = Adafruit_MQTT_Subscribe(&mqtt, "/cihaz/saat",MQTT_QOS_4);
-/*************************** Sketch Code ************************************/
-
-// Bug workaround for Arduino 1.6.6, it seems to need a function declaration
-// for some reason (only affects ESP8266, likely an arduino-builder bug).
-void wifibegin()
-{
-  char *wk = const_cast<char*>(wifikullaniciad.c_str());
-  char *ws = const_cast<char*>(wifisifre.c_str());
-  WiFi.begin(wk, ws);
-  if (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("");
-  Serial.println("WiFi connected");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
-  mqtt.subscribe(&onoffbutton);
-  
-}
 void MQTT_connect();
 
 void setup() {
-  
-  Serial.begin(115200);
+  pinMode(D6,OUTPUT); // 6 numaralı pin çıkış olarak ayarlandı
+  Serial.begin(115200);// serial haberleşme başlatıldı (Bu gerekli değil ama  veri akışını ekranda izlemek için lazım olacak)
+  delay(10);
 
+  Serial.println(F("Adafruit MQTT akıllı ev başlangıç 1 demo"));
 
-  wifibegin();
  
+  Serial.println(); Serial.println();
+  Serial.print("Buraya bağlanılıyor ");
+  Serial.println(WLAN_SSID);
+
+  WiFi.begin(WLAN_SSID, WLAN_PASS); // wifi bağlantısı kuruluyor
+  while (WiFi.status() != WL_CONNECTED) {  // wifi bağlantısı kurulana kadar ekranda . yazdırıldı (Serial console üzerinde sürekli .... yazıyorsa wifi bağlantısı başarılı olmamıştır)
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println();
+
+  Serial.println("WiFi Bağlandı");
+  Serial.println("IP address: "); Serial.println(WiFi.localIP());
+
+  mqtt.subscribe(&onoffbutton); // mqtt veri dinleyicisi başlatıldı
 }
 
-
+uint32_t x=0;
 
 void loop() {
 
- 
-  MQTT_connect();
-  if(mqtt.connected())
-  {
-  Adafruit_MQTT_Subscribe *subscription;
-  while ((subscription = mqtt.readSubscription(600))) {
+  MQTT_connect();// adafruit mqtt sunucusuna bağlanıyor 
+
+
+  Adafruit_MQTT_Subscribe *subscription;    // Buradan döngü sonuna kadar   adafruit üzerinden gelen veriler dinleniyor(Aç butonuna basınca Açık verisinin gelmesi gibi)
+  while ((subscription = mqtt.readSubscription(5000))) {
     if (subscription == &onoffbutton) {
-     
-      String gelenveri = String((char *)onoffbutton.lastread);
-       Serial.println(gelenveri);
-  }
-  }
- 
- 
-
-
-
- 
-    String gidecek = "1";
-    char *vr = const_cast<char*>(gidecek.c_str());
-    if (! photocell.publish(vr)) {
-      // Serial.println(F("Failed"));
-    } else {
-      // Serial.println(F("OK!"));
+      Serial.print(F("Got: "));
+      Serial.println((char *)onoffbutton.lastread);
+      String Gelenveri=String((char *)onoffbutton.lastread); // Gelen veri string formata çevrildi
+      if(Gelenveri=="Açık") // Gelen veri Açık ise (Buradaki açık yazısı bizim  resim 8 üzerinde oluşturduğumuz butona verdiğimiz isim)
+      {
+        digitalWrite(D6,1); // Gelen veri açık ise   6 numaralı pini yani   lambanın bağlı olduğu röleyi aç
+        }
+        else
+        {
+          digitalWrite(D6,0); //  Gelen veri açık değil ise lambayı kapat
+          }
+      
     }
   }
 
+ 
+ // Serial.print(F("\nSending photocell val "));
+ // Serial.print(x);
+ // Serial.print("...");
+ // if (! photocell.publish(x++)) {
+ //   Serial.println(F("Failed"));
+ // } else {
+ //   Serial.println(F("OK!"));
+ // }
 
 }
-void MQTT_connect() {
+
+void MQTT_connect() { //  Burası aşağıya doğru mqtt bağlantısını kurmak için. Burayı hazır olarak kullanabilirsiniz
   int8_t ret;
 
   // Stop if already connected.
@@ -108,23 +113,19 @@ void MQTT_connect() {
     return;
   }
 
- // Serial.print("Connecting to MQTT... ");
+  Serial.print("Connecting to MQTT... ");
 
   uint8_t retries = 3;
-  if ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
-    //Serial.println(mqtt.connectErrorString(ret));
-    //Serial.println("Retrying MQTT connection in 5 seconds...");
-   // mqtt.disconnect();
-    //delay(5000);  // wait 5 seconds
-    retries--;
-    if (retries == 0) {
-      // basically die and wait for WDT to reset me
-      //while (1);
-    }
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.println(mqtt.connectErrorString(ret));
+       Serial.println("Retrying MQTT connection in 5 seconds...");
+       mqtt.disconnect();
+       delay(5000);  // wait 5 seconds
+       retries--;
+       if (retries == 0) {
+         // basically die and wait for WDT to reset me
+         while (1);
+       }
   }
-  //Serial.println("MQTT Connected!");
-  if (mqtt.connected()) {
-    
-  }
-  
+  Serial.println("MQTT Bağlandı!");
 }
